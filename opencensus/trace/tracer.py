@@ -13,12 +13,51 @@
 # limitations under the License.
 
 from opencensus.trace.propagation import google_cloud_format
-from opencensus.trace.exporters import print_exporter
-from opencensus.trace.samplers import always_on
+from opencensus.trace.exporters import stackdriver_exporter
+from opencensus.trace.samplers import probability
 from opencensus.trace.span_context import SpanContext
 from opencensus.trace.tracers import context_tracer
 from opencensus.trace.tracers import noop_tracer
 from opencensus.trace import execution_context
+from opencensus.trace import tracer as tracer_module
+
+# Initialize a tracer, by default using the `PrintExporter`
+tracer = tracer_module.Tracer()
+
+# Sampling the requests at the rate equals 0.5
+sampler = probability.ProbabilitySampler(rate=0.5)
+tracer = tracer_module.Tracer(sampler=sampler)
+
+# Exporter to Stackdriver ==============================
+exporter = stackdriver_exporter.StackdriverExporter(
+    project_id='pychat-1')
+tracer = tracer_module.Tracer(exporter=exporter)
+
+# Propagator ===========================================
+propagator = google_cloud_format.GoogleCloudFormatPropagator()
+# Deserialize
+span_context = propagator.from_header(header)
+# Serialize
+header = propagator.to_header(span_context)
+
+#Flask wrapper =========================================
+from opencensus.trace.ext.flask.flask_middleware import FlaskMiddleware
+app = flask.Flask(__name__)
+# You can also specify the sampler, exporter, propagator in the middleware,
+# default is using `AlwaysOnSampler` as sampler, `PrintExporter` as exporter,
+# `GoogleCloudFormatPropagator` as propagator.
+middleware = FlaskMiddleware(app)
+
+
+# Example for creating nested spans =====================
+with tracer.span(name='span1') as span1:
+    do_something_to_trace()
+    with span1.span(name='span1_child1') as span1_child1:
+        do_something_to_trace()
+    with span1.span(name='span1_child2') as span1_child2:
+        do_something_to_trace()
+with tracer.span(name='span2') as span2:
+    do_something_to_trace()
 
 
 class Tracer(object):
